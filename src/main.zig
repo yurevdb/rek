@@ -1,4 +1,5 @@
 const std = @import("std");
+const mem = @import("std").mem;
 
 pub fn main() !void {
     const prompt = "R > ";
@@ -6,8 +7,25 @@ pub fn main() !void {
     while (true) {
         try print(prompt, .{});
         const input = try read();
+
+        if (is_exit_code(input)) {
+            return;
+        }
+
         try print("{s}\n", .{input});
     }
+}
+
+pub fn is_exit_code(input: []const u8) bool {
+    const exit_codes = [_][]const u8{ "q", "quit", "exit" };
+
+    for (exit_codes) |code| {
+        if (mem.eql(u8, input, code)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 pub fn read() ![]const u8 {
