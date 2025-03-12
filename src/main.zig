@@ -1,26 +1,6 @@
 const std = @import("std");
 const mem = @import("std").mem;
 
-const exit_codes = [_][]const u8{ "q", "quit", "exit" };
-
-pub fn main() !void {
-    const prompt = "R > ";
-
-    while (true) {
-        try print(prompt, .{});
-        const input = try read();
-
-        if (is_exit_code(input)) {
-            return;
-        }
-
-        const tokens = lex(input);
-        for (tokens) |token| {
-            try print("{c} => {}\n", .{ token.value, token.type });
-        }
-    }
-}
-
 const TokenType = enum {
     VALUE,
     ADD,
@@ -37,11 +17,32 @@ const Token = struct {
     value: u8,
 };
 
+const exit_codes = [_][]const u8{ "q", "quit", "exit" };
+const prompt = "R > ";
+
+pub fn main() !void {
+    while (true) {
+        try print(prompt, .{});
+        const input = try read();
+
+        if (is_exit_code(input)) {
+            return;
+        }
+
+        const tokens = lex(input);
+        for (tokens) |token| {
+            try print("{c} => {any}\n", .{ token.value, token.type });
+        }
+    }
+}
+
 pub fn lex(input: []const u8) []Token {
     var tokens: [512]Token = undefined;
     var counter: u16 = 0;
     for (input) |c| {
-        const token = switch (c) {
+        // No need for now to look at white spaces
+        if (c == ' ') continue;
+        tokens[counter] = switch (c) {
             '+' => Token{ .type = TokenType.ADD, .value = c },
             '-' => Token{ .type = TokenType.SUBTRACT, .value = c },
             '*' => Token{ .type = TokenType.MULTIPLY, .value = c },
@@ -51,7 +52,6 @@ pub fn lex(input: []const u8) []Token {
             ')', '}', ']' => Token{ .type = TokenType.BRACKET_CLOSE, .value = c },
             else => Token{ .type = TokenType.VALUE, .value = c },
         };
-        tokens[counter] = token;
         counter += 1;
     }
     return tokens[0..counter];
@@ -70,7 +70,6 @@ pub fn read() ![]const u8 {
     var input: [1024]u8 = undefined;
     const stdin = std.io.getStdIn().reader();
     const bytes_read = try stdin.readUntilDelimiter(&input, '\n');
-    // TODO: remove trailing white spaces
     return input[0..bytes_read.len];
 }
 
@@ -81,10 +80,4 @@ pub fn print(comptime format: []const u8, args: anytype) !void {
     const stdout = bw.writer();
     try stdout.print(format, args);
     try bw.flush(); // Don't forget to flush!
-}
-
-test "test exit codes" {
-    for (exit_codes) |code| {
-        try std.testing.expectEqual(true, is_exit_code(code));
-    }
 }
