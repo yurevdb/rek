@@ -15,46 +15,94 @@ const TokenType = enum {
 const Token = struct {
     type: TokenType,
     value: u8,
+
+    pub fn init(token_type: TokenType, value: u8) Token {
+        return Token{ .type = token_type, .value = value };
+    }
 };
 
 const exit_codes = [_][]const u8{ "q", "quit", "exit" };
+const token_list = [_]u8{ '+', '-', '*', '/', '^', '(', '{', '[', ']', '}', ')' };
 const prompt = "R > ";
 
 pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{ .thread_safe = true }){};
+    const ally = gpa.allocator();
+    defer {
+        if (gpa.deinit() == .leak) {
+            std.log.err("Memory leak", .{});
+        }
+    }
+
     while (true) {
         try print(prompt, .{});
-        const input = try read();
+        // need to allocate this info
+        const input = try read(ally);
+        defer ally.free(input);
 
         if (is_exit_code(input)) {
             return;
         }
 
-        const tokens = lex(input);
-        for (tokens) |token| {
+        const tokens = try lex(ally, input);
+        defer tokens.deinit();
+
+        for (tokens.items) |token| {
             try print("{c} => {any}\n", .{ token.value, token.type });
         }
     }
 }
 
-pub fn lex(input: []const u8) []Token {
-    var tokens: [512]Token = undefined;
-    var counter: u16 = 0;
-    for (input) |c| {
+pub fn lex(alloc: std.mem.Allocator, input: []const u8) !std.ArrayList(Token) {
+    var tokens = std.ArrayList(Token).init(alloc);
+    var index: u16 = 0;
+    while (index < input.len) {
+        const c = input[index];
+        index += 1;
+
         // No need for now to look at white spaces
         if (c == ' ') continue;
-        tokens[counter] = switch (c) {
-            '+' => Token{ .type = TokenType.ADD, .value = c },
-            '-' => Token{ .type = TokenType.SUBTRACT, .value = c },
-            '*' => Token{ .type = TokenType.MULTIPLY, .value = c },
-            '/' => Token{ .type = TokenType.DIVIDE, .value = c },
-            '^' => Token{ .type = TokenType.POWER, .value = c },
-            '(', '{', '[' => Token{ .type = TokenType.BRACKET_OPEN, .value = c },
-            ')', '}', ']' => Token{ .type = TokenType.BRACKET_CLOSE, .value = c },
-            else => Token{ .type = TokenType.VALUE, .value = c },
+
+        //const value: []const u8 = &[_]u8{c};
+
+        const token = switch (c) {
+            '+' => Token.init(TokenType.ADD, c),
+            '-' => Token.init(TokenType.SUBTRACT, c),
+            '*' => Token.init(TokenType.MULTIPLY, c),
+            '/' => Token.init(TokenType.DIVIDE, c),
+            '^' => Token.init(TokenType.POWER, c),
+            '(', '{', '[' => Token.init(TokenType.BRACKET_OPEN, c),
+            ')', '}', ']' => Token.init(TokenType.BRACKET_CLOSE, c),
+            else => Token.init(TokenType.VALUE, c),
+            //else => blk: {
+            //    // TODO: look further in the input to find a predefined token
+            //    var length: u16 = 0;
+            //    var is_token: bool = false;
+            //    while (!is_token and index < input.len) {
+            //        const temp_c = input[index];
+            //        if (in_slice(u8, &token_list, temp_c)) {
+            //            is_token = true;
+            //            index -= 1;
+            //        } else {
+            //            index += 1;
+            //            length += 1;
+            //        }
+            //    }
+            //    break :blk Token.init(TokenType.VALUE, input[index - length .. index]);
+            //},
         };
-        counter += 1;
+        try tokens.append(token);
     }
-    return tokens[0..counter];
+    return tokens;
+}
+
+pub fn in_slice(comptime T: type, haystack: []const T, needle: T) bool {
+    for (haystack) |thing| {
+        if (thing == needle) {
+            return true;
+        }
+    }
+    return false;
 }
 
 pub fn is_exit_code(input: []const u8) bool {
@@ -66,11 +114,10 @@ pub fn is_exit_code(input: []const u8) bool {
     return false;
 }
 
-pub fn read() ![]const u8 {
-    var input: [1024]u8 = undefined;
+pub fn read(alloc: std.mem.Allocator) ![]const u8 {
     const stdin = std.io.getStdIn().reader();
-    const bytes_read = try stdin.readUntilDelimiter(&input, '\n');
-    return input[0..bytes_read.len];
+    const line = try stdin.readUntilDelimiterAlloc(alloc, '\n', std.math.maxInt(usize));
+    return line;
 }
 
 /// Prints a line to stdout
