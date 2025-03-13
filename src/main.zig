@@ -14,9 +14,9 @@ const TokenType = enum {
 
 const Token = struct {
     type: TokenType,
-    value: u8,
+    value: []const u8,
 
-    pub fn init(token_type: TokenType, value: u8) Token {
+    pub fn init(token_type: TokenType, value: []const u8) Token {
         return Token{ .type = token_type, .value = value };
     }
 };
@@ -48,7 +48,7 @@ pub fn main() !void {
         defer tokens.deinit();
 
         for (tokens.items) |token| {
-            try print("{c} => {any}\n", .{ token.value, token.type });
+            try print("{s} => {any}\n", .{ token.value, token.type });
         }
     }
 }
@@ -57,15 +57,15 @@ pub fn lex(alloc: std.mem.Allocator, input: []const u8) !std.ArrayList(Token) {
     var tokens = std.ArrayList(Token).init(alloc);
     var index: u16 = 0;
     while (index < input.len) {
-        const c = input[index];
+        const c = input[index .. index + 1];
         index += 1;
 
         // No need for now to look at white spaces
-        if (c == ' ') continue;
+        if (c[0] == ' ') continue;
 
         //const value: []const u8 = &[_]u8{c};
 
-        const token = switch (c) {
+        const token = switch (c[0]) {
             '+' => Token.init(TokenType.ADD, c),
             '-' => Token.init(TokenType.SUBTRACT, c),
             '*' => Token.init(TokenType.MULTIPLY, c),
@@ -73,23 +73,20 @@ pub fn lex(alloc: std.mem.Allocator, input: []const u8) !std.ArrayList(Token) {
             '^' => Token.init(TokenType.POWER, c),
             '(', '{', '[' => Token.init(TokenType.BRACKET_OPEN, c),
             ')', '}', ']' => Token.init(TokenType.BRACKET_CLOSE, c),
-            else => Token.init(TokenType.VALUE, c),
-            //else => blk: {
-            //    // TODO: look further in the input to find a predefined token
-            //    var length: u16 = 0;
-            //    var is_token: bool = false;
-            //    while (!is_token and index < input.len) {
-            //        const temp_c = input[index];
-            //        if (in_slice(u8, &token_list, temp_c)) {
-            //            is_token = true;
-            //            index -= 1;
-            //        } else {
-            //            index += 1;
-            //            length += 1;
-            //        }
-            //    }
-            //    break :blk Token.init(TokenType.VALUE, input[index - length .. index]);
-            //},
+            else => blk: {
+                index -= 1;
+                const start = index;
+                var is_token: bool = false;
+                while (!is_token and index < input.len) {
+                    const temp_c = input[index];
+                    if (in_slice(u8, &token_list, temp_c)) {
+                        is_token = true;
+                    } else {
+                        index += 1;
+                    }
+                }
+                break :blk Token.init(TokenType.VALUE, input[start..index]);
+            },
         };
         try tokens.append(token);
     }
