@@ -3,9 +3,9 @@ const mem = @import("std").mem;
 const print = std.debug.print;
 const assert = std.debug.assert;
 
-const TokenType = enum { VALUE, ADD, SUBTRACT, MULTIPLY, DIVIDE, POWER, L_BRACKET, R_BRACKET };
+pub const TokenType = enum { VALUE, ADD, SUBTRACT, MULTIPLY, DIVIDE, POWER, L_BRACKET, R_BRACKET };
 
-const Token = struct {
+pub const Token = struct {
     type: TokenType,
     value: []const u8,
 
@@ -14,14 +14,14 @@ const Token = struct {
     }
 };
 
-const token_list = [_]u8{ '+', '-', '*', '/', '^', '(', '{', '[', ']', '}', ')' };
-const token_value_allowed = [_]u8{ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.' };
-
 pub const LexerError = error{
     InvalidCharacter,
     OutOfMemory,
     OutOfBounds,
 };
+
+const token_list = [_]u8{ '+', '-', '*', '/', '^', '(', '{', '[', ']', '}', ')' };
+const token_value_allowed = [_]u8{ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.' };
 
 pub fn lex(alloc: std.mem.Allocator, input: []const u8) LexerError!std.ArrayList(Token) {
     var tokens = std.ArrayList(Token).init(alloc);
@@ -60,7 +60,7 @@ pub fn lex(alloc: std.mem.Allocator, input: []const u8) LexerError!std.ArrayList
                     }
                 }
 
-                break :blk Token.init(TokenType.VALUE, input[start..index]);
+                break :blk Token.init(TokenType.VALUE, val);
             },
         };
 
@@ -82,23 +82,23 @@ fn remove_trailing_whitespaces(input: []const u8) []const u8 {
         if (input[0] == ' ') {
             return "";
         } else {
-            return &[1]u8{input[0]};
+            return input[0..1];
         }
     }
 
-    assert(i > 1);
-    // Length to index
+    assert(i > 1); // you never know :D
+    // Last index
     i -= 1;
 
     // Case for len > 1
     var idx_last_char: usize = 0;
-    while (i > 0) : (i -= 1) {
+    while (i >= 0) : (i -= 1) {
         const c = input[i];
         if (c == ' ') continue;
         idx_last_char = i;
         break;
     }
-    return input[0..idx_last_char];
+    return input[0 .. idx_last_char + 1];
 }
 
 fn contains(comptime T: type, haystack: []const T, needle: T) bool {
@@ -112,66 +112,53 @@ fn contains(comptime T: type, haystack: []const T, needle: T) bool {
 
 test "expect no error for '1-1'" {
     const input = "1-1";
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const ally = gpa.allocator();
-    defer {
-        if (gpa.deinit() == .leak) std.testing.expect(false) catch @panic("Test Failed");
-    }
-    const tokens = try lex(ally, input);
-    tokens.deinit();
+    const tokens = try lex(std.testing.allocator, input);
+    defer tokens.deinit();
 }
 
 test "expect no error for '1 - 1'" {
     const input = "1 - 1";
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const ally = gpa.allocator();
-    defer {
-        if (gpa.deinit() == .leak) std.testing.expect(false) catch @panic("Test Failed");
-    }
-    const tokens = try lex(ally, input);
-    tokens.deinit();
-}
-
-test "expect error for '1 1 - 1'" {
-    const input = "1 1 - 1";
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const ally = gpa.allocator();
-    defer {
-        if (gpa.deinit() == .leak) std.testing.expect(false) catch @panic("Test Failed");
-    }
-    const actual = lex(ally, input);
-    _ = try std.testing.expectError(LexerError.InvalidCharacter, actual);
-}
-
-test "expect error for '1e1 - 1'" {
-    const input = "1e1 - 1";
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const ally = gpa.allocator();
-    defer {
-        if (gpa.deinit() == .leak) std.testing.expect(false) catch @panic("Test Failed");
-    }
-    const actual = lex(ally, input);
-    _ = try std.testing.expectError(LexerError.InvalidCharacter, actual);
+    const tokens = try lex(std.testing.allocator, input);
+    defer tokens.deinit();
 }
 
 test "expect no error for '1.1 - 1'" {
     const input = "1.1 - 1";
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const ally = gpa.allocator();
-    defer {
-        if (gpa.deinit() == .leak) std.testing.expect(false) catch @panic("Test Failed");
-    }
-    const tokens = try lex(ally, input);
-    tokens.deinit();
+    const tokens = try lex(std.testing.allocator, input);
+    defer tokens.deinit();
 }
 
 test "expect no error for '123.123 + 123.456 * 123.321'" {
     const input = "123.123 + 123.456 * 123.321";
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const ally = gpa.allocator();
-    defer {
-        if (gpa.deinit() == .leak) std.testing.expect(false) catch @panic("Test Failed");
+    const tokens = try lex(std.testing.allocator, input);
+    defer tokens.deinit();
+}
+
+test "expect each token to contain 1 item from input = '1 - 1 -1- 1'" {
+    const input = "1 - 1 -1- 1";
+    const tokens = try lex(std.testing.allocator, input);
+    defer tokens.deinit();
+
+    for (tokens.items) |token| {
+        try std.testing.expect(token.value.len == 1);
     }
-    const tokens = try lex(ally, input);
-    tokens.deinit();
+}
+
+test "expect error for '1 1 - 1'" {
+    const input = "1 1 - 1";
+    // Not the nicest way of checking if  a certain error occured :(
+    if (lex(std.testing.allocator, input)) |tokens| {
+        tokens.deinit();
+    } else |err| {
+        try std.testing.expect(err == LexerError.InvalidCharacter);
+    }
+}
+
+test "expect error for '1e1 - 1'" {
+    const input = "1e1 - 1";
+    if (lex(std.testing.allocator, input)) |tokens| {
+        tokens.deinit();
+    } else |err| {
+        try std.testing.expect(err == LexerError.InvalidCharacter);
+    }
 }

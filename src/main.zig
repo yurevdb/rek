@@ -1,6 +1,7 @@
 const std = @import("std");
 const mem = @import("std").mem;
 const lexer = @import("lexer.zig");
+const parser = @import("parser.zig");
 
 const print = std.debug.print;
 
@@ -62,8 +63,6 @@ pub fn main() void {
         };
         defer tokens.deinit();
 
-        for (tokens.items) |token| {
-            print("{s} => {?}\n", .{ token.value, token.type });
-        }
+        parser.parse(tokens);
     }
 }
