@@ -63,6 +63,24 @@ pub fn main() void {
         };
         defer tokens.deinit();
 
-        parser.parse(tokens);
+        const expressions = parser.parse(ally, tokens) catch |err| switch (err) {
+            parser.ParserError.InvalidExpressionOrder => {
+                print("Order of expressions is not valid.\n", .{});
+                continue;
+            },
+            parser.ParserError.TokenNotYetImplemented => {
+                print("Token in input has not been implemented yet.\n", .{});
+                continue;
+            },
+            parser.ParserError.OutOfMemory => {
+                print("Out of Memory.\n", .{});
+                continue;
+            },
+        };
+        defer expressions.deinit();
+
+        for (expressions.items) |expr| {
+            print("Expression => LHS: '{s}' - Operator: '{s}' - RHS: '{s}'\n", .{ expr.LHS.value, expr.Operator.value, expr.RHS.value });
+        }
     }
 }

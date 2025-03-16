@@ -10,7 +10,7 @@ pub const Token = struct {
     value: []const u8,
 
     pub fn init(token_type: TokenType, value: []const u8) Token {
-        return Token{ .type = token_type, .value = value };
+        return .{ .type = token_type, .value = value };
     }
 };
 
