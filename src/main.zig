@@ -1,8 +1,9 @@
 const std = @import("std");
 const mem = @import("std").mem;
-const parser = @import("parser.zig");
+const lexer = @import("lexer.zig");
 
 const print = std.debug.print;
+
 const exit_codes = [_][]const u8{ "q", "quit", "exit" };
 const prompt = "R > ";
 
@@ -21,7 +22,7 @@ pub fn is_exit_code(input: []const u8) bool {
     return false;
 }
 
-pub fn main() !void {
+pub fn main() void {
     var gpa = std.heap.GeneralPurposeAllocator(.{ .thread_safe = true }){};
     const ally = gpa.allocator();
     defer {
@@ -33,14 +34,32 @@ pub fn main() !void {
     while (true) {
         print(prompt, .{});
 
-        const input = try read(ally);
+        const input = read(ally) catch |err| switch (err) {
+            else => {
+                print("Could not read input.\n", .{});
+                continue;
+            },
+        };
         defer ally.free(input);
 
         if (is_exit_code(input)) {
             return;
         }
 
-        const tokens = try parser.lex(ally, input);
+        const tokens = lexer.lex(ally, input) catch |err| switch (err) {
+            lexer.LexerError.InvalidCharacter => {
+                print("Found an invalid character.\n", .{});
+                continue;
+            },
+            lexer.LexerError.OutOfBounds => {
+                print("Went out of bounds.\n", .{});
+                continue;
+            },
+            lexer.LexerError.OutOfMemory => {
+                print("Out of Memory.\n", .{});
+                continue;
+            },
+        };
         defer tokens.deinit();
 
         for (tokens.items) |token| {
